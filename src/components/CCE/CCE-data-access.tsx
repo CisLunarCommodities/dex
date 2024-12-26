@@ -2,7 +2,7 @@
 
 import { getCCEProgram, getCCEProgramId } from '@project/anchor'
 import { useConnection } from '@solana/wallet-adapter-react'
-import { Cluster, Keypair, PublicKey } from '@solana/web3.js'
+import { Cluster, Keypair, PublicKey, SystemProgram } from '@solana/web3.js'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { useMemo } from 'react'
 import toast from 'react-hot-toast'
@@ -18,9 +18,9 @@ export function useCCEProgram() {
   const programId = useMemo(() => getCCEProgramId(cluster.network as Cluster), [cluster])
   const program = useMemo(() => getCCEProgram(provider, programId), [provider, programId])
 
-  const accounts = useQuery({
-    queryKey: ['CCE', 'all', { cluster }],
-    queryFn: () => program.account.CCE.all(),
+  const markets = useQuery({
+    queryKey: ['CCE', 'markets', { cluster }],
+    queryFn: () => program.account.Market.all(),
   })
 
   const getProgramAccount = useQuery({
@@ -28,77 +28,86 @@ export function useCCEProgram() {
     queryFn: () => connection.getParsedAccountInfo(programId),
   })
 
-  const initialize = useMutation({
-    mutationKey: ['CCE', 'initialize', { cluster }],
-    mutationFn: (keypair: Keypair) =>
-      program.methods.initialize().accounts({ CCE: keypair.publicKey }).signers([keypair]).rpc(),
+  const initialize_market = useMutation({
+    mutationKey: ['CCE', 'initialize_market', { cluster }],
+    mutationFn: async ({ keypair, commodity, initialPrice }: { keypair: Keypair, commodity: string, initialPrice: number }) =>
+      program.methods
+        .initialize_market(commodity, initialPrice)
+        .accounts({
+          market: keypair.publicKey,
+          authority: provider.wallet.publicKey,
+          systemProgram: SystemProgram.programId,
+        })
+        .signers([keypair])
+        .rpc(),
     onSuccess: (signature) => {
       transactionToast(signature)
-      return accounts.refetch()
+      return markets.refetch()
     },
-    onError: () => toast.error('Failed to initialize account'),
+    onError: () => toast.error('Failed to initialize market'),
   })
 
   return {
     program,
     programId,
-    accounts,
+    markets,
     getProgramAccount,
-    initialize,
+    initialize_market,
   }
 }
 
 export function useCCEProgramAccount({ account }: { account: PublicKey }) {
+  const { connection } = useConnection()
   const { cluster } = useCluster()
   const transactionToast = useTransactionToast()
-  const { program, accounts } = useCCEProgram()
+  const provider = useAnchorProvider()
+  const programId = useMemo(() => getCCEProgramId(cluster.network as Cluster), [cluster])
+  const program = useMemo(() => getCCEProgram(provider, programId), [provider, programId])
 
-  const accountQuery = useQuery({
-    queryKey: ['CCE', 'fetch', { cluster, account }],
-    queryFn: () => program.account.CCE.fetch(account),
+  const marketInfo = useQuery({
+    queryKey: ['CCE', 'market', { cluster, account }],
+    queryFn: () => program.account.Market.fetch(account),
   })
 
-  const closeMutation = useMutation({
-    mutationKey: ['CCE', 'close', { cluster, account }],
-    mutationFn: () => program.methods.close().accounts({ CCE: account }).rpc(),
-    onSuccess: (tx) => {
-      transactionToast(tx)
-      return accounts.refetch()
+  const place_buy_order = useMutation({
+    mutationKey: ['CCE', 'place_buy_order', { cluster, account }],
+    mutationFn: async ({ quantity, price }: { quantity: number, price: number }) =>
+      program.methods
+        .place_buy_order(quantity, price)
+        .accounts({
+          market: account,
+          owner: provider.wallet.publicKey,
+          systemProgram: SystemProgram.programId,
+        })
+        .rpc(),
+    onSuccess: (signature) => {
+      transactionToast(signature)
+      return marketInfo.refetch()
     },
+    onError: () => toast.error('Failed to place buy order'),
   })
 
-  const decrementMutation = useMutation({
-    mutationKey: ['CCE', 'decrement', { cluster, account }],
-    mutationFn: () => program.methods.decrement().accounts({ CCE: account }).rpc(),
-    onSuccess: (tx) => {
-      transactionToast(tx)
-      return accountQuery.refetch()
+  const place_sell_order = useMutation({
+    mutationKey: ['CCE', 'place_sell_order', { cluster, account }],
+    mutationFn: async ({ quantity, price }: { quantity: number, price: number }) =>
+      program.methods
+        .placeSellOrder(quantity, price)
+        .accounts({
+          market: account,
+          owner: provider.wallet.publicKey,
+          systemProgram: SystemProgram.programId,
+        })
+        .rpc(),
+    onSuccess: (signature) => {
+      transactionToast(signature)
+      return marketInfo.refetch()
     },
-  })
-
-  const incrementMutation = useMutation({
-    mutationKey: ['CCE', 'increment', { cluster, account }],
-    mutationFn: () => program.methods.increment().accounts({ CCE: account }).rpc(),
-    onSuccess: (tx) => {
-      transactionToast(tx)
-      return accountQuery.refetch()
-    },
-  })
-
-  const setMutation = useMutation({
-    mutationKey: ['CCE', 'set', { cluster, account }],
-    mutationFn: (value: number) => program.methods.set(value).accounts({ CCE: account }).rpc(),
-    onSuccess: (tx) => {
-      transactionToast(tx)
-      return accountQuery.refetch()
-    },
+    onError: () => toast.error('Failed to place sell order'),
   })
 
   return {
-    accountQuery,
-    closeMutation,
-    decrementMutation,
-    incrementMutation,
-    setMutation,
+    marketInfo,
+    place_buy_order,
+    place_sell_order,
   }
 }

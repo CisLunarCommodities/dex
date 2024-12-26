@@ -5,7 +5,7 @@ import { WalletButton } from '../solana/solana-provider'
 import { AppHero, ellipsify } from '../ui/ui-layout'
 import { ExplorerLink } from '../cluster/cluster-ui'
 import { useCCEProgram } from './CCE-data-access'
-import { CCECreate, CCEList } from './CCE-ui'
+import { CreateMarket, MarketList } from './CCE-ui'
 
 export default function CCEFeature() {
   const { publicKey } = useWallet()
@@ -16,15 +16,15 @@ export default function CCEFeature() {
       <AppHero
         title="CCE"
         subtitle={
-          'Create a new account by clicking the "Create" button. The state of a account is stored on-chain and can be manipulated by calling the program\'s methods (increment, decrement, set, and close).'
+          'Create a new market by clicking the "Create" button. Markets are stored on-chain and can be traded using LOX tokens.'
         }
       >
         <p className="mb-6">
           <ExplorerLink path={`account/${programId}`} label={ellipsify(programId.toString())} />
         </p>
-        <CCECreate />
+        <CreateMarket />
       </AppHero>
-      <CCEList />
+      <MarketList />
     </div>
   ) : (
     <div className="max-w-4xl mx-auto">
