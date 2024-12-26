@@ -8,63 +8,123 @@ declare_id!("coUnmi3oBUtwtd9fjeAvSsJssXh5A5xyPbhpewyzRVF");
 pub mod CCE {
     use super::*;
 
-  pub fn close(_ctx: Context<CloseCCE>) -> Result<()> {
-    Ok(())
-  }
+    pub fn initialize_market(ctx: Context<InitializeMarket>, commodity: String, initial_price: u64) -> Result<()> {
+        let market = &mut ctx.accounts.market;
+        market.commodity = commodity;
+        market.current_price = initial_price;
+        market.volume = 0;
+        market.authority = ctx.accounts.authority.key();
+        Ok(())
+    }
 
-  pub fn decrement(ctx: Context<Update>) -> Result<()> {
-    ctx.accounts.CCE.count = ctx.accounts.CCE.count.checked_sub(1).unwrap();
-    Ok(())
-  }
+    pub fn place_buy_order(ctx: Context<PlaceOrder>, quantity: u64, price: u64) -> Result<()> {
+        let order = &mut ctx.accounts.order;
+        let market = &mut ctx.accounts.market;
 
-  pub fn increment(ctx: Context<Update>) -> Result<()> {
-    ctx.accounts.CCE.count = ctx.accounts.CCE.count.checked_add(1).unwrap();
-    Ok(())
-  }
+        order.owner = ctx.accounts.owner.key();
+        order.quantity = quantity;
+        order.price = price;
+        order.is_buy = true;
+        order.timestamp = Clock::get()?.unix_timestamp;
+        
+        market.volume = market.volume.checked_add(quantity).unwrap();
+        market.current_price = price;
 
-  pub fn initialize(_ctx: Context<InitializeCCE>) -> Result<()> {
-    Ok(())
-  }
+        Ok(())
+    }
 
-  pub fn set(ctx: Context<Update>, value: u8) -> Result<()> {
-    ctx.accounts.CCE.count = value.clone();
-    Ok(())
-  }
+    pub fn place_sell_order(ctx: Context<PlaceOrder>, quantity: u64, price: u64) -> Result<()> {
+        let order = &mut ctx.accounts.order;
+        let market = &mut ctx.accounts.market;
+
+        order.owner = ctx.accounts.owner.key();
+        order.quantity = quantity;
+        order.price = price;
+        order.is_buy = false;
+        order.timestamp = Clock::get()?.unix_timestamp;
+        
+        market.volume = market.volume.checked_add(quantity).unwrap();
+        market.current_price = price;
+
+        Ok(())
+    }
+
+    pub fn close_market(ctx: Context<CloseMarket>) -> Result<()> {
+        // Verify authority
+        require!(
+            ctx.accounts.market.authority == ctx.accounts.authority.key(),
+            CCEError::UnauthorizedAccess
+        );
+        Ok(())
+    }
 }
 
 #[derive(Accounts)]
-pub struct InitializeCCE<'info> {
-  #[account(mut)]
-  pub payer: Signer<'info>,
+pub struct InitializeMarket<'info> {
+    #[account(mut)]
+    pub authority: Signer<'info>,
 
-  #[account(
-  init,
-  space = 8 + CCE::INIT_SPACE,
-  payer = payer
-  )]
-  pub CCE: Account<'info, CCE>,
-  pub system_program: Program<'info, System>,
-}
-#[derive(Accounts)]
-pub struct CloseCCE<'info> {
-  #[account(mut)]
-  pub payer: Signer<'info>,
-
-  #[account(
-  mut,
-  close = payer, // close account and return lamports to payer
-  )]
-  pub CCE: Account<'info, CCE>,
+    #[account(
+        init,
+        payer = authority,
+        space = Market::SPACE
+    )]
+    pub market: Account<'info, Market>,
+    
+    pub system_program: Program<'info, System>,
 }
 
 #[derive(Accounts)]
-pub struct Update<'info> {
-  #[account(mut)]
-  pub CCE: Account<'info, CCE>,
+pub struct PlaceOrder<'info> {
+    #[account(mut)]
+    pub owner: Signer<'info>,
+
+    #[account(mut)]
+    pub market: Account<'info, Market>,
+
+    #[account(
+        init,
+        payer = owner,
+        space = Order::SPACE
+    )]
+    pub order: Account<'info, Order>,
+
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+pub struct CloseMarket<'info> {
+    #[account(mut)]
+    pub authority: Signer<'info>,
+
+    #[account(
+        mut,
+        close = authority,
+    )]
+    pub market: Account<'info, Market>,
 }
 
 #[account]
 #[derive(InitSpace)]
-pub struct CCE {
-  count: u8,
+pub struct Market {
+    pub commodity: String,
+    pub current_price: u64,
+    pub volume: u64,
+    pub authority: Pubkey,
+}
+
+#[account]
+#[derive(InitSpace)]
+pub struct Order {
+    pub owner: Pubkey,
+    pub quantity: u64,
+    pub price: u64,
+    pub is_buy: bool,
+    pub timestamp: i64,
+}
+
+#[error_code]
+pub enum CCEError {
+    #[msg("You are not authorized to perform this action")]
+    UnauthorizedAccess,
 }
