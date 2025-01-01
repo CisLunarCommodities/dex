@@ -1,6 +1,6 @@
 'use client'
 
-import { getCCEProgram, getCCEProgramId } from '@project/anchor'
+import { CCE, getCCEProgram, getCCEProgramId } from '@project/anchor'
 import { useConnection } from '@solana/wallet-adapter-react'
 import { Cluster, Keypair, PublicKey, SystemProgram } from '@solana/web3.js'
 import { useMutation, useQuery } from '@tanstack/react-query'
@@ -20,7 +20,7 @@ export function useCCEProgram() {
 
   const markets = useQuery({
     queryKey: ['CCE', 'markets', { cluster }],
-    queryFn: () => program.account.Market.all(),
+    queryFn: () => program.account.market.all(),
   })
 
   const getProgramAccount = useQuery({
@@ -66,7 +66,7 @@ export function useCCEProgramAccount({ account }: { account: PublicKey }) {
 
   const marketInfo = useQuery({
     queryKey: ['CCE', 'market', { cluster, account }],
-    queryFn: () => program.account.Market.fetch(account),
+    queryFn: () => program.account.market.fetch(account),
   })
 
   const place_buy_order = useMutation({
